@@ -1,18 +1,30 @@
-const { HttpError } = require("../../assistants");
+const { HttpError } = require("../../helpers");
 const { User } = require("../../models");
+const fs = require("fs/promises");
+const path = require("path");
+const Jimp = require("jimp");
 
-const updateSubscription = async (req, res) => {
+const avatarDir = path.join(__dirname, "..", "..", "public", "avatars");
+const updAvatar = async (req, res) => {
   const { _id } = req.user;
 
-  if (!req.body) throw HttpError(400, "missing field subscription");
+  if (!req.file) throw HttpError(400, "missing field avatar");
 
-  const { email, subscription } = await User.findByIdAndUpdate(_id, req.body, {
-    new: true,
-    runValidators: true,
-  });
-  if (!email || !subscription) throw HttpError(404, "Not found");
+  const { path: tempUpload, originalname } = req.file;
+  await Jimp.read(tempUpload).then((img) =>
+    img.resize(250, 250).write(`${tempUpload}`)
+  );
 
-  res.status(201).json({ email, subscription });
+  const fileName = `${_id}_${originalname}`;
+  const resultUpload = path.join(avatarDir, fileName);
+  await fs.rename(tempUpload, resultUpload);
+
+  const avatarURL = path.join("avatars", fileName);
+  await User.findByIdAndUpdate(_id, { avatarURL });
+
+  if (!avatarURL) throw HttpError(404, "Not found");
+
+  res.json({ avatarURL });
 };
 
-module.exports = updateSubscription;
+module.exports = updAvatar;
